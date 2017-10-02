@@ -114,7 +114,7 @@ namespace L
 			startRule =
 				qi::lit("create")
 				>> qi::as_string[+(qi::alnum - qi::char_('('))][BIND_VALUE(Function::SetName, func)]
-				>> '('
+				>> qi::char_('(')
 				>> *paramRule
 				>> qi::char_(')')
 				>> qi::char_('{')
