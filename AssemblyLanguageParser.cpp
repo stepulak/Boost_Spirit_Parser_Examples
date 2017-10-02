@@ -50,7 +50,7 @@ namespace L
 
 		bool isValid = true;
 		std::string name;
-		std::vector<std::string> param;
+		std::vector<std::string> params;
 		std::vector<Command> commands;
 
 	public:
@@ -64,7 +64,7 @@ namespace L
 
 		void AddFunctionParameter(const std::string& p) {
 			//std::cout << "adding function parameter " << p << std::endl;
-			param.push_back(p);
+			params.push_back(p);
 		}
 
 		void AddCommand(const std::string& c) {
@@ -93,6 +93,86 @@ namespace L
 				isValid = false;
 			}
 			return isValid;
+		}
+
+		void Execute() const {
+			if (!isValid) {
+				return;
+			}
+			std::cout << "Executing:" << std::endl;
+
+			std::map<std::string, int> variables;
+			bool shouldQuit = false;
+
+			auto checkVariable = [&](const std::string& s) -> bool {
+				if (variables.find(s) == variables.end()) {
+					std::cerr << "Error: Variable " << s << " does not exist" << std::endl;
+					shouldQuit = true;
+					return false;
+				}
+				return true;
+			};
+
+			// Initialize parameters as variables
+			for (const auto& p : params) {
+				variables[p] = 0;
+			}
+
+			for (const auto& c : commands) {
+				if (shouldQuit) {
+					return;
+				}
+
+				if (c.commandName == "create") {
+					variables[c.param1] = 0;
+				}
+				else if (c.commandName == "setval") {
+					if (checkVariable(c.param1)) {
+						variables[c.param1] = std::atoi(c.param2.c_str());
+					}
+				}
+				else if (c.commandName == "setvar") {
+					if (checkVariable(c.param1) && checkVariable(c.param2)) {
+						variables[c.param1] = variables[c.param2];
+					}
+				}
+				else if (c.commandName == "print") {
+					if (checkVariable(c.param1)) {
+						std::cout << c.param1 << " = " << variables[c.param1] << std::endl;
+					}
+				}
+				else if (c.commandName == "add") {
+					if (checkVariable(c.param1) && checkVariable(c.param2)) {
+						variables[c.param1] += variables[c.param2];
+					}
+				}
+				else if (c.commandName == "sub") {
+					if (checkVariable(c.param1) && checkVariable(c.param2)) {
+						variables[c.param1] -= variables[c.param2];
+					}
+				}
+				else if (c.commandName == "mul") {
+					if (checkVariable(c.param1) && checkVariable(c.param2)) {
+						variables[c.param1] *= variables[c.param2];
+					}
+				}
+				else if (c.commandName == "div") {
+					if (checkVariable(c.param1) && checkVariable(c.param2)) {
+						if (variables[c.param2] != 0) {
+							variables[c.param1] /= variables[c.param2];
+						}
+						else {
+							std::cerr << "Division by zero" << std::endl;
+							return;
+						}
+					}
+				}
+			}
+
+			std::cout << "Variables stats:" << std::endl;
+			for (const auto& p : variables) {
+				std::cout << p.first << " = " << p.second << std::endl;
+			}
 		}
 	};
 
@@ -139,7 +219,7 @@ namespace L
 }
 
 template<typename It>
-void ParseAndRun(It first, It end)
+void ParseAndExecute(It first, It end)
 {
 	L::FunctionParser<It> parser;
 	bool succ = qi::phrase_parse(first, end, parser, ascii::space, std::string());
@@ -149,6 +229,7 @@ void ParseAndRun(It first, It end)
 	// TODO replace first iterator with begin
 	if (succ && func.CheckValidity()) {
 		std::cout << "Parsing successful" << std::endl;
+		func.Execute();
 	}
 	else {
 		std::cout << "Parsing failed" << std::endl;
@@ -160,7 +241,7 @@ int main() {
 
 	do {
 		std::getline(std::cin, line);
-		ParseAndRun(line.cbegin(), line.cend());
+		ParseAndExecute(line.cbegin(), line.cend());
 	} while (!line.empty());
 
 	return 0;
