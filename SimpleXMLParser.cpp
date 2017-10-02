@@ -2,6 +2,7 @@
 #include <boost/spirit/include/phoenix.hpp>
 #include <boost/variant/recursive_wrapper.hpp>
 #include <boost/phoenix/core.hpp>
+#include <boost/phoenix/bind/bind_member_function.hpp>
 
 #include <string>
 #include <iostream>
@@ -12,7 +13,7 @@ namespace qi = boost::spirit::qi;
 namespace ascii = boost::spirit::ascii;
 namespace phoenix = boost::phoenix;
 
-#define BIND_VALUE(static_method) phoenix::bind(&static_method, qi::_1)
+#define BIND_VALUE(method, bind_point) phoenix::bind(&method, &bind_point, qi::_1)
 
 /// primitive XML parser for parsing simple XML files, eg.:
 /// <?info?>
@@ -24,60 +25,45 @@ namespace phoenix = boost::phoenix;
 ///   <tag4 key="value"/>
 /// </tag>
 namespace XML {
-
-	// For spirit parser
-	// I'm using Builder namespace for creating XML tree (more manual work, but I find it more fancy)
-	struct Expression {
-		std::string expression;
-
-		Expression& operator=(const std::string& str) {
-			expression = str;
-			return *this;
-		}
-	};
-
 	struct XMLNode {
-		std::string name = {};
 		bool isPaired = false;
 		bool closing = false;
+		std::string name = {};
 		std::string body = {};
 		std::vector<std::pair<std::string, std::string>> keyValuePairs;
 		std::unique_ptr<XMLNode> next;
 
-		XMLNode& GetNext() {
+		XMLNode& CreateNext() {
 			next = std::make_unique<XMLNode>();
 			return *next;
 		}
 	};
-	
-	// We have to use functions for binding qi::_1 via phoenix::bind during parsing...
-	namespace Builder {
-		namespace {
-			XMLNode _emptyNode;
 
-			std::vector<std::string> tagStack;
-			bool isValidXML;
-			std::unique_ptr<XMLNode> xmlTree;
-			std::reference_wrapper<XMLNode> currentNode(_emptyNode);
+	XMLNode _emptyNode;
 
-			void CheckAndCreateTree() {
-				if (xmlTree == nullptr) {
-					xmlTree = std::make_unique<XMLNode>();
-					currentNode = std::ref(*xmlTree);
-				}
+	class Builder {
+	private:
+
+		bool isValidXML = true;
+		std::vector<std::string> tagStack;
+		std::unique_ptr<XMLNode> xmlTree;
+		std::reference_wrapper<XMLNode> currentNode = std::ref(_emptyNode);
+
+		void CheckAndCreateTree() {
+			if (xmlTree == nullptr) {
+				xmlTree = std::make_unique<XMLNode>();
+				currentNode = std::ref(*xmlTree);
 			}
-
-			void StackIsInvalid() {
-				isValidXML = false;
-				std::cerr << "Invalid XML" << std::endl;
-			}
-		} // namespace
-
-		void Init() {
-			tagStack.clear();
-			isValidXML = true;
-			xmlTree.reset(nullptr);
 		}
+
+		void StackIsInvalid() {
+			isValidXML = false;
+			std::cerr << "Invalid XML" << std::endl;
+		}
+
+	public:
+
+		Builder() = default;
 
 		void Postprocessing() {
 			if (!tagStack.empty()) {
@@ -88,7 +74,7 @@ namespace XML {
 		void PushSingleTag(const std::string& tag) {
 			//std::cout << "push single tag " << tag << std::endl;
 			if (isValidXML) {
-				auto& node = currentNode.get().GetNext();
+				auto& node = currentNode.get().CreateNext();
 				node.isPaired = false;
 				node.name = tag;
 				currentNode = std::ref(node);
@@ -99,7 +85,7 @@ namespace XML {
 			//std::cout << "push pair tag " << tag << std::endl;
 			if (isValidXML) {
 				CheckAndCreateTree();
-				auto& node = currentNode.get().GetNext();
+				auto& node = currentNode.get().CreateNext();
 				node.isPaired = true;
 				node.closing = false;
 				node.name = tag;
@@ -112,7 +98,7 @@ namespace XML {
 			//std::cout << "pop pair tag " << tag << std::endl;
 			if (isValidXML) {
 				if (tagStack.back() == tag) {
-					auto& node = currentNode.get().GetNext();
+					auto& node = currentNode.get().CreateNext();
 					node.isPaired = true;
 					node.closing = true;
 					node.name = tag;
@@ -151,7 +137,7 @@ namespace XML {
 				}
 				auto& node = currentNode.get();
 				if (node.isPaired == false) {
-					node.keyValuePairs.push_back(std::pair<std::string, std::string>(paramName, {}));
+					node.keyValuePairs.emplace_back(paramName, std::string());
 				}
 				else {
 					StackIsInvalid();
@@ -161,7 +147,7 @@ namespace XML {
 
 		void AddParameterValue(std::string value) {
 			//std::cout << "add parameter value " << value << std::endl;
-			// Is it empty? Then do not be
+			// Are you empty? Then do not be
 			if (value.empty()) {
 				value = " ";
 			}
@@ -180,7 +166,7 @@ namespace XML {
 			}
 		}
 
-		bool IsValidXML() {
+		bool IsValidXML() const {
 			return isValidXML && xmlTree != nullptr && xmlTree->next != nullptr;
 		}
 
@@ -192,27 +178,25 @@ namespace XML {
 			}
 			return nullptr;
 		}
-
-	} // namespace
+	};
 
 	template<typename It>
-	class Parser : public qi::grammar<It, Expression(), ascii::space_type>
+	class Parser : public qi::grammar<It, std::string(), ascii::space_type>
 	{
 	private:
 
-		qi::rule<It, Expression(), ascii::space_type> startRule;
-		qi::rule<It, Expression(), ascii::space_type> tagRule;
-		qi::rule<It, Expression(), ascii::space_type> paramRule;
-		qi::rule<It, Expression(), ascii::space_type> singleTagRule;
-		qi::rule<It, Expression(), ascii::space_type> pairTagRule;
-		qi::rule<It, Expression(), ascii::space_type> bodyRule;
+		qi::rule<It, std::string(), ascii::space_type> startRule;
+		qi::rule<It, std::string(), ascii::space_type> paramRule;
+		qi::rule<It, std::string(), ascii::space_type> singleTagRule;
+		qi::rule<It, std::string(), ascii::space_type> pairTagRule;
+		qi::rule<It, std::string(), ascii::space_type> bodyRule;
+
+		Builder builder;
 
 	public:
 
 		Parser() : Parser::base_type(startRule)
 		{
-			Builder::Init();
-
 			// Oh what a mess... AND STILL VALID C++ :(... (I would shot myself for this Perl like program)
 
 			startRule =
@@ -220,81 +204,91 @@ namespace XML {
 				>> *(singleTagRule | pairTagRule);
 
 			paramRule =
-				qi::as_string[+qi::alnum][BIND_VALUE(Builder::AddParameterName)]
+				qi::as_string[+qi::alnum][BIND_VALUE(Builder::AddParameterName, builder)]
 				>> qi::lit("=\"")
-				>> qi::as_string[+qi::alnum][BIND_VALUE(Builder::AddParameterValue)]
+				>> qi::as_string[+qi::alnum][BIND_VALUE(Builder::AddParameterValue, builder)]
 				>> qi::lit("\"");
 
 			singleTagRule =
 				qi::char_('<')
-				>> qi::as_string[qi::lexeme[+(qi::alnum - qi::char_(">"))] >> !qi::lit(">")][BIND_VALUE(Builder::PushSingleTag)]
+				>> qi::as_string[qi::lexeme[+(qi::alnum - qi::char_(">"))] >> !qi::lit(">")][BIND_VALUE(Builder::PushSingleTag, builder)]
 				>> *paramRule
 				>> qi::lit("/>");
 
-			pairTagRule %=
+			pairTagRule =
 				qi::lit("<")
-				>> qi::as_string[qi::lexeme[+(qi::alnum - qi::char_(">")) >> qi::lit(">")]][BIND_VALUE(Builder::PushPairTag)]
+				>> qi::as_string[qi::lexeme[+(qi::alnum - qi::char_(">")) >> qi::lit(">")]][BIND_VALUE(Builder::PushPairTag, builder)]
 				>> *(singleTagRule | bodyRule | pairTagRule)
 				>> qi::lit("</")
-				>> qi::as_string[qi::lexeme[+(qi::alnum - qi::char_('>')) >> qi::lit(">")]][BIND_VALUE(Builder::PopPairTag)];
+				>> qi::as_string[qi::lexeme[+(qi::alnum - qi::char_('>')) >> qi::lit(">")]][BIND_VALUE(Builder::PopPairTag, builder)];
 
-			bodyRule = qi::as_string[!qi::lit("<") >> +qi::alnum >> !qi::lit(">")][BIND_VALUE(Builder::SetBody)];
+			bodyRule = qi::as_string[!qi::lit("<") >> +qi::alnum >> !qi::lit(">")][BIND_VALUE(Builder::SetBody, builder)];
 		}
-	};
-}
 
-BOOST_FUSION_ADAPT_STRUCT(XML::Expression, (std::string, expression));
-
-template<typename It>
-bool parse(It begin, It end)
-{
-	XML::Parser<It> parser;
-	XML::Expression expression;
-	bool ret = qi::phrase_parse(begin, end, parser, ascii::space, expression);
-	XML::Builder::Postprocessing();
-	return ret;
-}
-
-void PrintXMLTree(const XML::XMLNode& node, int lvl = 0) {
-	if (node.isPaired && node.closing) {
-		lvl = lvl - 1;
-	}
-	
-	static auto printSpaces = [](int l) {
-		for (; l > 0; l--) {
-			std::cout << ' ';
+		Builder& GetBuilder() {
+			return builder;
 		}
 	};
 
-	printSpaces(lvl);
 
-	if (node.isPaired) {
-		if (!node.closing) {
-			std::cout << '<' << node.name << '>' << std::endl;
-			if (!node.body.empty()) {
-				printSpaces(lvl + 1);
-				std::cout << node.body << std::endl;
+	void PrintXMLTree(const XML::XMLNode& node, int lvl = 0) {
+		if (node.isPaired && node.closing) {
+			lvl = lvl - 1;
+		}
+
+		static auto printSpaces = [](int l) {
+			for (; l > 0; l--) {
+				std::cout << ' ';
 			}
-			if (node.next != nullptr) {
-				PrintXMLTree(*node.next, lvl + 1);
+		};
+
+		printSpaces(lvl);
+
+		if (node.isPaired) {
+			if (!node.closing) {
+				std::cout << '<' << node.name << '>' << std::endl;
+				if (!node.body.empty()) {
+					printSpaces(lvl + 1);
+					std::cout << node.body << std::endl;
+				}
+				if (node.next != nullptr) {
+					PrintXMLTree(*node.next, lvl + 1);
+				}
+			}
+			else {
+				std::cout << "</" << node.name << '>' << std::endl;
+				if (node.next != nullptr) {
+					PrintXMLTree(*node.next, lvl);
+				}
 			}
 		}
 		else {
-			std::cout << "</" << node.name << '>' << std::endl;
+			std::cout << '<' << node.name;
+			for (const auto& p : node.keyValuePairs) {
+				std::cout << ' ' << p.first << "=\"" << p.second << "\"";
+			}
+			std::cout << "/>" << std::endl;
 			if (node.next != nullptr) {
 				PrintXMLTree(*node.next, lvl);
 			}
 		}
 	}
+}
+
+template<typename It>
+void ParseAndPrint(It begin, It end)
+{
+	XML::Parser<It> parser;
+	bool succ = qi::phrase_parse(begin, end, parser, ascii::space, std::string());
+	auto& builder = parser.GetBuilder();
+
+	if (succ && builder.IsValidXML()) {
+		std::cout << "Parsing successful" << std::endl;
+		auto tree = builder.GetXMLTree();
+		XML::PrintXMLTree(*tree);
+	}
 	else {
-		std::cout << '<' << node.name;
-		for (const auto& p : node.keyValuePairs) {
-			std::cout << ' ' << p.first << "=\"" << p.second << "\"";
-		}
-		std::cout << "/>" << std::endl;
-		if (node.next != nullptr) {
-			PrintXMLTree(*node.next, lvl);
-		}
+		std::cout << "Parsing failed" << std::endl;
 	}
 }
 
@@ -304,16 +298,7 @@ int main()
 
 	do {
 		std::getline(std::cin, line);
-		bool succ = parse(line.cbegin(), line.cend());
-
-		if (succ && XML::Builder::IsValidXML()) {
-			std::cout << "Parsing successful" << std::endl;
-			auto tree = XML::Builder::GetXMLTree();
-			PrintXMLTree(*tree);
-		}
-		else {
-			std::cout << "Parsing failed" << std::endl;
-		}
+		ParseAndPrint(line.cbegin(), line.cend());
 	} while (!line.empty());
 
 	return 0;
