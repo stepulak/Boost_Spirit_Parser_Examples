@@ -271,33 +271,33 @@ void PrintXMLTree(const XML::XMLNode& node, int lvl = 0) {
 template<typename It>
 void ParseAndPrint(It begin, It end)
 {
-	XML::Parser<It> parser;
+    XML::Parser<It> parser;
     std::string s;
-	bool succ = qi::phrase_parse(begin, end, parser, ascii::space, s);
-	auto& builder = parser.GetBuilder();
+    bool succ = qi::phrase_parse(begin, end, parser, ascii::space, s);
+    auto& builder = parser.GetBuilder();
 
-	if (succ && builder.IsValidXML()) {
-		std::cout << "Parsing successful" << std::endl;
-		auto tree = builder.FetchAndClearXMLTree();
-		XML::PrintXMLTree(*tree);
-	}
-	else {
-		std::cout << "Parsing failed" << std::endl;
-	}
+    if (succ && builder.IsValidXML()) {
+        std::cout << "Parsing successful" << std::endl;
+        auto tree = builder.FetchAndClearXMLTree();
+        XML::PrintXMLTree(*tree);
+    }
+    else {
+    	std::cout << "Parsing failed" << std::endl;
+    }
 }
 
 int main()
 {
-	std::string line;
+    std::string line;
     std::stringstream ss;
     
-	do {
-		std::getline(std::cin, line);
+    do {
+	std::getline(std::cin, line);
         ss << line;
-	} while (!line.empty());
+    } while (!line.empty());
     
     auto str = ss.str();
     ParseAndPrint(str.cbegin(), str.cend());
 
-	return 0;
+    return 0;
 }
