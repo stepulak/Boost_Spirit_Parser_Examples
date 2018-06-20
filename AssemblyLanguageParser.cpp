@@ -14,16 +14,16 @@
 	Example:
 
 	create function_name(param1, param2,...) {
-		create x
-		create y
-		setval x 5
-		setval y 10
-		add y y
-		mul x y
-		sub y x
-		div x y
-		setvar param1 x
-		setvar param2 y
+		create x,
+		create y,
+		setval x 5,
+		setval y 10,
+		add y y,
+		mul x y,
+		sub y x,
+		div x y,
+		setvar param1 x,
+		setvar param2 y,
 		print x
 	}
 */
@@ -36,197 +36,197 @@ namespace phoenix = boost::phoenix;
 
 namespace L
 {
-	class Function {
-	private:
 
-		struct Command {
-			std::string commandName;
-			std::string param1;
-			std::string param2;
+class Function {
+private:
 
-			Command(const std::string& cmdName)
-				: commandName(cmdName) {}
-		};
+    struct Command {
+        std::string commandName;
+        std::string param1;
+        std::string param2;
 
-		bool isValid = true;
-		std::string name;
-		std::vector<std::string> params;
-		std::vector<Command> commands;
+        Command(const std::string& cmdName)
+            : commandName(cmdName) {}
+    };
 
-	public:
+    bool isValid = true;
+    std::string name;
+    std::vector<std::string> params;
+    std::vector<Command> commands;
 
-		Function() = default;
+public:
 
-		void SetName(const std::string& n) {
-			//std::cout << "setting name " << n << std::endl;
-			name = n;
-		}
+    Function() = default;
 
-		void AddFunctionParameter(const std::string& p) {
-			//std::cout << "adding function parameter " << p << std::endl;
-			params.push_back(p);
-		}
+    void SetName(const std::string& n) {
+        //std::cout << "setting name " << n << std::endl;
+        name = n;
+    }
 
-		void AddCommand(const std::string& c) {
-			//std::cout << "adding command " << c << std::endl;
-			commands.emplace_back(c);
-		}
+    void AddFunctionParameter(const std::string& p) {
+        //std::cout << "adding function parameter " << p << std::endl;
+        params.push_back(p);
+    }
 
-		void AddCommandParameter(const std::string& p) {
-			//std::cout << "adding command parameter " << p << std::endl;
-			if (!commands.empty()) {
-				auto& b = commands.back();
-				if (b.param1.empty()) {
-					b.param1 = p;
-				}
-				else if (b.param2.empty()) {
-					b.param2 = p;
-				}
-				else {
-					isValid = false;
-				}
-			}
-		}
+    void AddCommand(const std::string& c) {
+        //std::cout << "adding command " << c << std::endl;
+        commands.emplace_back(c);
+    }
 
-		bool CheckValidity() {
-			if (name.empty()) {
-				isValid = false;
-			}
-			return isValid;
-		}
+    void AddCommandParameter(const std::string& p) {
+        //std::cout << "adding command parameter " << p << std::endl;
+        if (!commands.empty()) {
+            auto& b = commands.back();
+            if (b.param1.empty()) {
+                b.param1 = p;
+            }
+            else if (b.param2.empty()) {
+                b.param2 = p;
+            }
+            else {
+                isValid = false;
+            }
+        }
+    }
 
-		void Execute() const {
-			if (!isValid) {
-				return;
-			}
-			std::cout << "Executing:" << std::endl;
+    bool CheckValidity() {
+        if (name.empty()) {
+            isValid = false;
+        }
+        return isValid;
+    }
 
-			std::map<std::string, int> variables;
-			bool shouldQuit = false;
+    void Execute() const {
+        if (!isValid) {
+            return;
+        }
+        std::cout << "Executing:" << std::endl;
 
-			auto checkVariable = [&](const std::string& s) -> bool {
-				if (variables.find(s) == variables.end()) {
-					std::cerr << "Error: Variable " << s << " does not exist" << std::endl;
-					shouldQuit = true;
-					return false;
-				}
-				return true;
-			};
+        std::map<std::string, int> variables;
+        bool shouldQuit = false;
 
-			// Initialize parameters as variables
-			for (const auto& p : params) {
-				variables[p] = 0;
-			}
+        auto checkVariable = [&](const std::string& s) -> bool {
+            if (variables.find(s) == variables.end()) {
+                std::cerr << "Error: Variable " << s << " does not exist" << std::endl;
+                shouldQuit = true;
+                return false;
+            }
+            return true;
+        };
 
-			for (const auto& c : commands) {
-				if (shouldQuit) {
-					return;
-				}
+        // Initialize parameters as variables
+        for (const auto& p : params) {
+            variables[p] = 0;
+        }
 
-				if (c.commandName == "create") {
-					variables[c.param1] = 0;
-				}
-				else if (c.commandName == "setval") {
-					if (checkVariable(c.param1)) {
-						variables[c.param1] = std::atoi(c.param2.c_str());
-					}
-				}
-				else if (c.commandName == "setvar") {
-					if (checkVariable(c.param1) && checkVariable(c.param2)) {
-						variables[c.param1] = variables[c.param2];
-					}
-				}
-				else if (c.commandName == "print") {
-					if (checkVariable(c.param1)) {
-						std::cout << c.param1 << " = " << variables[c.param1] << std::endl;
-					}
-				}
-				else if (c.commandName == "add") {
-					if (checkVariable(c.param1) && checkVariable(c.param2)) {
-						variables[c.param1] += variables[c.param2];
-					}
-				}
-				else if (c.commandName == "sub") {
-					if (checkVariable(c.param1) && checkVariable(c.param2)) {
-						variables[c.param1] -= variables[c.param2];
-					}
-				}
-				else if (c.commandName == "mul") {
-					if (checkVariable(c.param1) && checkVariable(c.param2)) {
-						variables[c.param1] *= variables[c.param2];
-					}
-				}
-				else if (c.commandName == "div") {
-					if (checkVariable(c.param1) && checkVariable(c.param2)) {
-						if (variables[c.param2] != 0) {
-							variables[c.param1] /= variables[c.param2];
-						}
-						else {
-							std::cerr << "Division by zero" << std::endl;
-							return;
-						}
-					}
-				}
-			}
+        for (const auto& c : commands) {
+            if (shouldQuit) {
+                return;
+            }
 
-			std::cout << "Variables stats:" << std::endl;
-			for (const auto& p : variables) {
-				std::cout << p.first << " = " << p.second << std::endl;
-			}
-		}
-	};
+            if (c.commandName == "create") {
+                variables[c.param1] = 0;
+            }
+            else if (c.commandName == "setval") {
+                if (checkVariable(c.param1)) {
+                    variables[c.param1] = std::atoi(c.param2.c_str());
+                }
+            }
+            else if (c.commandName == "setvar") {
+                if (checkVariable(c.param1) && checkVariable(c.param2)) {
+                    variables[c.param1] = variables[c.param2];
+                }
+            }
+            else if (c.commandName == "print") {
+                if (checkVariable(c.param1)) {
+                    std::cout << c.param1 << " = " << variables[c.param1] << std::endl;
+                }
+            }
+            else if (c.commandName == "add") {
+                if (checkVariable(c.param1) && checkVariable(c.param2)) {
+                    variables[c.param1] += variables[c.param2];
+                }
+            }
+            else if (c.commandName == "sub") {
+                if (checkVariable(c.param1) && checkVariable(c.param2)) {
+                    variables[c.param1] -= variables[c.param2];
+                }
+            }
+            else if (c.commandName == "mul") {
+                if (checkVariable(c.param1) && checkVariable(c.param2)) {
+                    variables[c.param1] *= variables[c.param2];
+                }
+            }
+            else if (c.commandName == "div") {
+                if (checkVariable(c.param1) && checkVariable(c.param2)) {
+                    if (variables[c.param2] != 0) {
+                        variables[c.param1] /= variables[c.param2];
+                    }
+                    else {
+                        std::cerr << "Division by zero" << std::endl;
+                        return;
+                    }
+                }
+            }
+        }
 
-	template<typename It>
-	class FunctionParser : public qi::grammar<It, std::string(), ascii::space_type>
-	{
-	private:
+        std::cout << "Variables stats:" << std::endl;
+        for (const auto& p : variables) {
+            std::cout << p.first << " = " << p.second << std::endl;
+        }
+    }
+};
 
-		qi::rule<It, std::string(), ascii::space_type> startRule;
-		qi::rule<It, std::string(), ascii::space_type> paramRule;
-		qi::rule<It, std::string(), ascii::space_type> bodyRule;
+template<typename It>
+class FunctionParser : public qi::grammar<It, std::string(), ascii::space_type>
+{
+private:
 
-		Function func;
+    qi::rule<It, std::string(), ascii::space_type> startRule;
+    qi::rule<It, std::string(), ascii::space_type> paramRule;
+    qi::rule<It, std::string(), ascii::space_type> bodyRule;
 
-	public:
+    Function func;
 
-		FunctionParser() : FunctionParser::base_type(startRule)
-		{
-			startRule =
-				qi::lit("create")
-				>> qi::as_string[+(qi::alnum - qi::char_('('))][BIND_VALUE(Function::SetName, func)]
-				>> qi::char_('(')
-				>> *paramRule
-				>> qi::char_(')')
-				>> qi::char_('{')
-				>> -bodyRule
-				>> qi::char_('}');
+public:
 
-			paramRule =
-				qi::as_string[+(qi::alnum)][BIND_VALUE(Function::AddFunctionParameter, func)]
-				>> -qi::char_(',');
+    FunctionParser() : FunctionParser::base_type(startRule)
+    {
+        startRule =
+            qi::lit("create")
+            >> qi::as_string[+(qi::alnum - qi::char_('('))][BIND_VALUE(Function::SetName, func)]
+            >> qi::char_('(')
+            >> *paramRule
+            >> qi::char_(')')
+            >> qi::char_('{')
+            >> -bodyRule
+            >> qi::char_('}');
 
-			bodyRule =
-				qi::as_string[qi::lexeme[+qi::alnum - qi::char_('}')]][BIND_VALUE(Function::AddCommand, func)]
-				>> -qi::as_string[qi::lexeme[+qi::alnum - qi::char_('}')]][BIND_VALUE(Function::AddCommandParameter, func)]
-				>> -qi::as_string[qi::lexeme[+qi::alnum - qi::char_('}')]][BIND_VALUE(Function::AddCommandParameter, func)]
-				>> -(qi::char_(',') >> bodyRule);
-		}
+        paramRule =
+            qi::as_string[+(qi::alnum)][BIND_VALUE(Function::AddFunctionParameter, func)]
+            >> -qi::char_(',');
 
-		Function& GetParsedFunction() {
-			return func;
-		}
-	};
+        bodyRule =
+            qi::as_string[qi::lexeme[+qi::alnum - qi::char_('}')]][BIND_VALUE(Function::AddCommand, func)]
+            >> -qi::as_string[qi::lexeme[+qi::alnum - qi::char_('}')]][BIND_VALUE(Function::AddCommandParameter, func)]
+            >> -qi::as_string[qi::lexeme[+qi::alnum - qi::char_('}')]][BIND_VALUE(Function::AddCommandParameter, func)]
+            >> -(qi::char_(',') >> bodyRule);
+    }
+
+    Function& GetParsedFunction() {
+        return func;
+    }
+};
 }
 
 template<typename It>
 void ParseAndExecute(It first, It end)
 {
 	L::FunctionParser<It> parser;
-	bool succ = qi::phrase_parse(first, end, parser, ascii::space, std::string());
+    std::string s;
+	bool succ = qi::phrase_parse(first, end, parser, ascii::space, s);
 	auto& func = parser.GetParsedFunction();
 
-	// TODO check first iterator
-	// TODO replace first iterator with begin
 	if (succ && func.CheckValidity()) {
 		std::cout << "Parsing successful" << std::endl;
 		func.Execute();
@@ -238,11 +238,15 @@ void ParseAndExecute(It first, It end)
 
 int main() {
 	std::string line;
-
+    std::stringstream ss;
+    
 	do {
 		std::getline(std::cin, line);
-		ParseAndExecute(line.cbegin(), line.cend());
+        ss << line;
 	} while (!line.empty());
+    
+    auto str = ss.str();
+    ParseAndExecute(str.cbegin(), str.cend());
 
 	return 0;
 }
